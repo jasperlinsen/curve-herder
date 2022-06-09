@@ -68,8 +68,8 @@ class Point {
     get x(){ return this.#x; }
     get y(){ return this.#y; }
 
-    set x(x){ this.#x = clamp( x ); }
-    set y(y){ this.#y = clamp( y ); }
+    set x(x){ this.#x = x; }
+    set y(y){ this.#y = y; }
 
     [Symbol.iterator] = function *(){
 
@@ -106,6 +106,11 @@ class Point {
         const my = sy + dy * normal; 
 
         return new Point( mx, my );
+
+    }
+    toFixed( fractionDigits ){
+
+        return `[${this.x.toFixed( fractionDigits )},${this.y.toFixed( fractionDigits )}]`;
 
     }
 
@@ -329,6 +334,21 @@ function addRandomLine(){
     return newLine;
 
 }
+function newInversedControlPoint( point ){
+
+    if( pointSet.has( point ) ){
+
+        const cp = Array.from( pointSet.get( point ).cp ).shift();
+        const ox = point[0] - cp[0];
+        const oy = point[1] - cp[1];
+
+        return new Point( point[0] + ox, point[1] + oy );
+
+    }
+
+    return randomPoint();
+
+}
 function newRandomControlPoint( start, end, normal = .5, radius = .25 ){
 
     const [ mx, my ] = start.lerpTo( end, normal );
@@ -349,21 +369,6 @@ function randomColor(){
 
 }
 
-function newInversedControlPoint( point ){
-
-    if( pointSet.has( point ) ){
-
-        const cp = Array.from( pointSet.get( point ).cp ).shift();
-        const ox = point[0] - cp[0];
-        const oy = point[1] - cp[1];
-
-        return new Point( point[0] + ox, point[1] + oy );
-
-    }
-
-    return randomPoint();
-
-}
 function addNewLineToPointSet( newLine ){
 
     pointSet.set( newLine.from, pointSet.get( newLine.from ) || { type: 'point', cp: new Set })
@@ -387,38 +392,6 @@ function colorOfAnglesBetween( cp1, cp2, saturation = 100, brightness = 50 ){
 
 }
 
-function drawControlPoint( point, connectTo, context = overlayCtx ){
-
-    if( connectTo ){
-
-        context.save();
-
-        context.strokeStyle = 'black';
-        context.lineWidth = 1;
-
-        context.beginPath();
-        context.moveTo( point[0] * overlay.width, point[1] * overlay.height );
-        context.lineTo( connectTo[0] * overlay.width, connectTo[1] * overlay.height );
-        context.stroke();
-
-        context.beginPath();
-        context.arc( connectTo[0] * overlay.width, connectTo[1]  * overlay.height, 10, 0, Math.Pi * 2 );
-        context.fillStyle = 'white';
-        context.fill();
-        context.stroke();
-
-        context.restore();
-
-    }
-
-    if( point ){
-
-        overlayCtx.fillStyle = 'black';
-        overlayCtx.fillRect( point[0] * overlay.width - 5, point[1] * overlay.height - 5, 10, 10 );
-
-    }
-
-}
 function drawLineCurved( line, context = ctx, progress ){
 
     const { from, to, cp1, cp2 } = line;
@@ -509,121 +482,11 @@ function UIInputResetDefault(){
     });
 
 }
-function UIFrame( delta ){
-
-    if( reconnectAllPoints ){
-
-        pointSet.clear();
-
-        lines.forEach( addNewLineToPointSet );
-
-        reconnectAllPoints = false;
-
-    }
-
-    if( drawUI ) pointSet.forEach((data, point) => {
-
-        if( data.fillStyle ){
-
-            switch( data.type ){
-                case 'point': {
-                    
-                    overlayCtx.fillStyle = data.fillStyle;
-                    overlayCtx.strokeStyle = data.strokeStyle;
-                    overlayCtx.lineWidth = 1;
-
-                } break;
-                case 'cp': {
-
-                    if( !DISPLAY_ANCHORS ) return;
-
-                    overlayCtx.save();
-                    overlayCtx.beginPath();
-                    overlayCtx.moveTo( point[0] * overlay.width, point[1] * overlay.height );
-                    overlayCtx.lineTo( data.origin[0] * overlay.width, data.origin[1] * overlay.height  );
-                    overlayCtx.globalCompositeOperation = 'destination-over';
-                    overlayCtx.strokeStyle = 'black';
-                    overlayCtx.lineWidth = 1;
-                    overlayCtx.stroke();
-                    overlayCtx.strokeStyle = 'white';
-                    overlayCtx.lineWidth = 3;
-                    overlayCtx.stroke();
-                    overlayCtx.restore();
-
-                    overlayCtx.fillStyle = 'black';
-                    overlayCtx.strokeStyle = 'white';
-                    overlayCtx.lineWidth = 1;
-
-                };
-            }
-            
-            overlayCtx.fillStyle = data.fillStyle;
-            overlayCtx.globalAlpha = data.globalAlpha;
-
-            overlayCtx.beginPath();
-            overlayCtx.arc( point[0] * overlay.width, point[1] * overlay.height, UI_RADIUS, 0, Math.PI * 2 );
-            overlayCtx.fill();
-            overlayCtx.stroke();
-            overlayCtx.restore();
-
-        }
-
-    });  
-
-    return overlay;
-
-}
-function UIFrameIntersectionCanvas( delta ){
-
-    recomputingIntersections = recomputingIntersections || getIntersections().then(data => {
-
-        remainingIntersections = data.intersections;
-        recomputingIntersections = null;
-
-    });
-    
-    displayHintForTimeRemaining = clamp( displayHintForTimeRemaining - delta, 0 , 1000 );
-
-    intersectionCtx.clearRect( 0,0, intersectionCanvas.width, intersectionCanvas.width );
-    
-    if( displayHintForTimeRemaining > 0 ){
-
-        const allMarks = new Path2D;
-
-        remainingIntersections.forEach(point => {
-
-            const path = new Path2D;
-
-            path.arc(
-                point.x * intersectionCanvas.width,
-                point.y * intersectionCanvas.height,
-                50, 
-                0,
-                Math.PI * 2
-            );
-
-            allMarks.addPath( path );
-
-        });
-
-        // intersectionCtx.drawImage( buffer, 0,0, intersectionCanvas.width, intersectionCanvas.width );
-        // intersectionCtx.globalCompositeOperation = 'destination-in';
-        intersectionCtx.strokeStyle = 'white';
-        intersectionCtx.beginPath();
-        intersectionCtx.stroke( allMarks );
-        // intersectionCtx.globalCompositeOperation = 'source-in';
-        // intersectionCtx.fillRect( 0, 0, intersectionCanvas.width, intersectionCanvas.height );
-
-    }
-
-    return intersectionCanvas;
-
-}
 
 function lineListToSVGPath( lineList ){
 
     let fullPath = '';
-    
+
     lineList.forEach(line => {
 
         const { from, cp1, cp2, to } = line;
@@ -632,14 +495,15 @@ function lineListToSVGPath( lineList ){
 
     });
 
-    const asSVG = document.getElementById( 'path-calculator' ) || document.body.appendChild( new DOMParser().parseFromString( ` <svg id="path-calculator" viewBox="0 0 1 1" xmlns="http://www.w3.org/2000/svg" style="visibility:hidden;width:0;height:0">
-        <path vector-effect="no-scaling-stroke" />
-    </svg>`, 'image/svg+xml' ).querySelector( 'svg' ) );
-    const pathSVG = asSVG.querySelector( 'path' );
+    const asSVG = document.getElementById( 'path-calculator' ) || document.body.appendChild( new DOMParser().parseFromString( ` <svg id="path-calculator" viewBox="0 0 1 1" xmlns="http://www.w3.org/2000/svg" style="visibility:hidden;width:0;height:0"></svg>`, 'image/svg+xml' ).querySelector( 'svg' ) );
+    const pathSVG = document.createElementNS( 'http://www.w3.org/2000/svg', 'path' );
 
+    pathSVG.setAttribute( 'vector-effect', 'non-scaling-stroke' );
     pathSVG.setAttribute( 'd', fullPath );
 
-    return pathSVG.cloneNode( true );
+    asSVG.appendChild( pathSVG );
+
+    return pathSVG;
 
 }
 
@@ -691,6 +555,8 @@ async function getIntersections( amount = CHECK_PRECISION, rate = 50 ){
         }
 
     };
+
+    pathSVG.remove();
 
     return { intersections, path: pathSVG, d: pathSVG.getAttribute( 'd' ) };;
 
@@ -744,45 +610,10 @@ async function generatePuzzle( size = 5 ){
     }
 
     currentLine = lines[lines.length - 1];
-    redrawAllLines = 10;
     remainingIntersections = hasIntersections.intersections;
 
 }
 
-async function flashing_screen_colors(
-    colors = [ 'red', 'green', 'blue', 'yellow' ],
-    repeat = 4,
-    delay = 10
-){
-
-    await frame_delay(10);
-
-    const bg = document.body.style.getPropertyValue( '--bg' );
-    const click = await_event( document.body, 'click' );
-
-    repeatLoop: while( repeat-- > 0 ){
-
-        const currentColors = colors.slice();
-
-        colorLoop: while( currentColors.length ){
-
-            const color = currentColors.shift();
-
-            document.body.style.setProperty( '--bg', color );
-
-            if( await Promise.race([ click, frame_delay( delay ) ]) ){
-                
-                break repeatLoop;
-
-            }
-
-        }
-
-    }
-    
-    document.body.style.setProperty( '--bg', bg );
-
-}
 function secondsToTimeString( seconds ){
 
     const minutes = Math.floor( seconds / 60 );
@@ -798,6 +629,121 @@ async function uploadSVGForPathPilfering(){
 }
 
 /** DRAWING */
+function puzzleEvaluateIntersections( delta ){
+
+    recomputingIntersections = recomputingIntersections || getIntersections().then(data => {
+        
+        remainingIntersections = data.intersections;
+        recomputingIntersections = null;
+
+    });
+    
+    return intersectionCanvas;
+
+}
+function puzzleDrawHint( delta ){
+
+    intersectionCtx.clearRect( 0,0, intersectionCanvas.width, intersectionCanvas.width );
+
+    if( displayHintTimeRemaining > 0 ){
+
+        displayHintTimeRemaining = clamp( displayHintTimeRemaining - delta, 0, DURATIONS.hint );
+
+        const allMarks = new Path2D;
+        const p = clamp( displayHintTimeRemaining / DURATIONS.hint );
+
+        remainingIntersections.forEach(point => {
+
+            displayHintPointRadius = displayHintPointRadius || {};
+
+            const path = new Path2D;
+            const fixed = point.toFixed( 5 );
+            const radius = displayHintPointRadius[ fixed ] || Math.floor( Math.random() * 50) + Math.max( innerHeight, innerWidth ) / 1.5;
+            
+            displayHintPointRadius[ fixed ] = radius;
+
+            path.arc(
+                point.x * intersectionCanvas.width,
+                point.y * intersectionCanvas.height,
+                radius * (1 - p || .999999), 
+                0,
+                Math.PI * 2
+            );
+
+            allMarks.addPath( path );
+
+        });
+        
+        intersectionCtx.save();
+        intersectionCtx.lineWidth = 4;
+        intersectionCtx.strokeStyle = `rgba(255,255,255,${p*p})`;
+        intersectionCtx.stroke( allMarks );
+        intersectionCtx.restore();
+        
+    } else {
+
+        displayHintPointRadius = null;
+
+    }
+
+    return intersectionCanvas;
+
+}
+function puzzleDrawPoints( delta ){
+
+    pointSet.forEach((data, point) => {
+
+        if( data.fillStyle ){
+
+            switch( data.type ){
+                case 'point': {
+                    
+                    overlayCtx.fillStyle = data.fillStyle;
+                    overlayCtx.strokeStyle = data.strokeStyle;
+                    overlayCtx.lineWidth = 1;
+
+                } break;
+                case 'cp': {
+
+                    if( !DISPLAY_ANCHORS ) return;
+
+                    overlayCtx.save();
+                    overlayCtx.beginPath();
+                    overlayCtx.moveTo( point[0] * overlay.width, point[1] * overlay.height );
+                    overlayCtx.lineTo( data.origin[0] * overlay.width, data.origin[1] * overlay.height  );
+                    overlayCtx.globalCompositeOperation = 'destination-over';
+                    overlayCtx.strokeStyle = 'black';
+                    overlayCtx.lineWidth = 1;
+                    overlayCtx.stroke();
+                    overlayCtx.strokeStyle = 'white';
+                    overlayCtx.lineWidth = 3;
+                    overlayCtx.stroke();
+                    overlayCtx.restore();
+
+                    overlayCtx.fillStyle = 'black';
+                    overlayCtx.strokeStyle = 'white';
+                    overlayCtx.lineWidth = 1;
+
+                };
+            }
+            
+            overlayCtx.fillStyle = data.fillStyle;
+            overlayCtx.globalAlpha = data.globalAlpha;
+
+            overlayCtx.beginPath();
+            overlayCtx.arc( point[0] * overlay.width, point[1] * overlay.height, UI_RADIUS, 0, Math.PI * 2 );
+            overlayCtx.fill();
+            overlayCtx.stroke();
+            overlayCtx.restore();
+
+        }
+
+    });
+
+    return overlay;
+
+}
+
 async function puzzleDrawIntro( duration = 1000 ){
 
     const { svg, path, d } = await getIntersections();
@@ -827,54 +773,92 @@ async function puzzleDrawIntro( duration = 1000 ){
 }
 async function puzzleDrawMainGame(){
 
-    let delta = await frame_delay();
-
     while( true ){
 
-        ctx.clearRect( 0, 0, canvas.width, canvas.height );
-        ctx.drawImage( buffer, 0, 0, canvas.width, canvas.height );
-    
-        bufferCtx.clearRect( 0, 0, buffer.width, buffer.height );
-        lines.forEach(line => drawLine( line, ctx, 1 ));
-    
-        [ UIFrame( delta ), UIFrameIntersectionCanvas( delta ) ].forEach(buffer => {
-    
-            ctx.drawImage( buffer, 0, 0, canvas.width, canvas.height );
-    
-        });
-    
-        if( !isPaused ){
-            
-            ticker += delta;
-            
-            if( remainingIntersections.length && lines.length ) puzzleTime += delta;
-        
-        }
+        const delta = await frame_delay();
+        const complete = !pointer.hold && !remainingIntersections.length;
 
         remainingOutput.textContent = remainingIntersections.length;
         timeOutput.textContent = secondsToTimeString( Math.floor( puzzleTime / 1000 ) );
-    
-        if( document.body.classList.toggle( 'you-won', !pointer.hold && !remainingIntersections.length ) ){
 
-            break;
+        ctx.clearRect( 0, 0, canvas.width, canvas.height );
+        lines.forEach(line => drawLine( line, ctx, 1 ));
+    
+        if( !complete ){
+
+            ctx.drawImage( puzzleDrawPoints( delta ), 0, 0 );
+            ctx.drawImage( puzzleEvaluateIntersections( delta ), 0, 0 );
+            ctx.drawImage( puzzleDrawHint( delta ), 0, 0 );
 
         }
 
-        delta = await frame_delay();
+        puzzleTime += delta;
+
+        document.body.classList.toggle( 'you-won', complete );
+
+        if( complete ) break;
 
     }
 
 }
 async function puzzleDrawEndGame(){
 
-    await flashing_screen_colors([
-        'gold', 'orange'
-    ], 7, 10);
+    const { width, height } = canvas;
+    const path = lineListToSVGPath( lines );
+    const scale = Math.max( width, height );
+    const length = path.getTotalLength();
+    const path2D = new Path2D( path.getAttribute( 'd' ) );
 
-    canvas.width = canvas.width;
-    canvas.height = canvas.height;
+    buffer.width = width;
+    buffer.height = height;
+    bufferCtx.drawImage( canvas, 0, 0, width, height );
 
-    const score = await Menu.awaitScore( puzzleTime, lines );
+    for( let i = 0; i < 120; i++ ){
+
+        canvas.width = width;
+        canvas.height = height;
+
+        ctx.save();
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'white';
+        ctx.drawImage( buffer, 0, 0, width, height );
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.scale( width, height );
+        ctx.lineWidth = 20 / scale;
+        ctx.setLineDash([ length * i / 120, length * 3 ]);
+        ctx.stroke( path2D );
+        ctx.restore();
+
+        await frame_delay();
+
+    }
+
+    for( let i = 0; i < 120; i++ ){
+
+        canvas.width = width;
+        canvas.height = height;
+
+        ctx.save();
+        ctx.globalAlpha = 1 - clamp(i / 120);
+        ctx.shadowColor = 'white';
+        ctx.shadowBlur = length * i * 40 * scale;
+        ctx.strokeStyle = `white`;
+        ctx.scale( width, height );
+        ctx.lineWidth = 20 / scale;
+        ctx.stroke( path2D );
+        ctx.restore();
+
+        await frame_delay();
+
+    }
+
+    path.remove(); // Dont forget or paths will fill up the SVG memory!
+
+    canvas.width = width;
+    canvas.height = height;
+
+    await Menu.awaitScore( puzzleTime, lines );
+
     const options = [
         { text: `Next puzzle` },
         { text: `Quit` }
@@ -892,6 +876,8 @@ async function puzzleDrawEndGame(){
             return mainMenu();
         } break;
     }
+
+    document.body.classList.remove( 'you-won', complete );
 
 }
 
@@ -955,6 +941,8 @@ async function mainMenu(){
 
         switch( option ){
             case allOptions[0]: if( hasInLocalStorage ){
+
+                pointSet.clear();
 
                 lines = hasInLocalStorage;
                 lines.forEach( addNewLineToPointSet );
@@ -1104,19 +1092,34 @@ function onPointerMove( event ){
     } else if( pointer.hold ){
 
         const dx = (x - pointer.cx) / innerWidth;
-        const dy = (y - pointer.cy) / innerHeight;
+        const dy =  (y - pointer.cy) / innerHeight;
 
         pointer.hold.forEach(holding => {
 
-            const pointData = pointSet.get( holding );
+            // Clamp the movement of the main point from 0-1
+            // To give the same movement to the controls points,
+            // we need to copy the point, add the movement, then clamp it
+            // back within range. The difference between the new and original
+            // point will be stored in mx and my and added to the control points.
+            // This prevents the control points from distorting when their
+            // control points are moved more than the central point itself.
 
-            holding[0] += dx;
-            holding[1] += dy;
+            const pointData = pointSet.get( holding );
+            const holdingClone = new Point( holding[0], holding[1] );
+
+            holdingClone[0] = clamp( holdingClone[0] + dx );
+            holdingClone[1] = clamp( holdingClone[1] + dy );
+
+            const mx = holdingClone[0] - holding[0];
+            const my = holdingClone[1] - holding[1];
+
+            holding[0] += mx;
+            holding[1] += my;
     
             if( pointData.cp && pointData.cp.size ) pointData.cp.forEach(cp => {
     
-                cp[0] += dx;
-                cp[1] += dy;
+                cp[0] += mx;
+                cp[1] += my;
 
                 const cpData = pointSet.get( cp );
 
@@ -1130,8 +1133,6 @@ function onPointerMove( event ){
             pointData.globalAlpha = 1;
 
         });
-
-        redrawAllLines = 1;
 
     }
 
@@ -1183,7 +1184,6 @@ const intersectionCtx = intersectionCanvas.getContext( '2d' );
 const intersectionBuffer = document.getElementById( 'intersection-buffer' );
 const intersectionBufferCtx = intersectionBuffer.getContext( '2d' );
 
-const INTERPOLATE_CUBIC = (v) => v * v;
 const LOCALSTORAGE_NAMESPACE = 'draw-something';
 const APPROACH_RADIUS = 200;
 const HOVER_RADIUS = 20;
@@ -1192,6 +1192,7 @@ const CHECK_PRECISION = 1000;
 const DISPLAY_ANCHORS = false;
 const DISPLAY_CURSOR_FADEOUT = false;
 const SCORING = { START: 1000, PER_SECOND: -10, PER_SEGMENT: 50 };
+const DURATIONS = { hint: 2000 };
 
 const resetInput = document.getElementById( 'reset' );
 const clearCanvasses = document.getElementById( 'clear' );
@@ -1204,7 +1205,6 @@ const hintButton = document.getElementById( 'hint' );
 
 let gameMode = 'puzzle';
 let duration = 2000;
-let ticker = 0;
 let type = null;
 let lines = [];
 let defaults = new Map;
@@ -1215,23 +1215,20 @@ let currentLine;
 let compositeOperationurrentLine;
 let lineWidthScale;
 let isPaused = false;
-let drawUI = false;
-let interpolate = INTERPOLATE_CUBIC;
 let deprecationMessageCounters = {};
 let score = SCORING.START;
 let currentPuzzleLineCount = 5;
 
 let pointSet = new Map;
-let redrawAllLines = 0;
 let pointer = { disabled: false, cx: 0, cy: 0, sx: 0, sy: 0, hold: null, over: null,down: false, st: 0, ct: 0 };
 
 let remainingIntersections = [];
 let recomputingIntersections;
-let reconnectAllPoints = true;
 let puzzleTime = 0;
 let puzzleCompleted = 0;
 
-let displayHintForTimeRemaining = 0;
+let displayHintTimeRemaining = 0;
+let displayHintPointRadius = {};
 
 UIInputInit( 'draw-something-type', value => type = value );
 UIInputInit( 'draw-something-cp-radius', value => newControlPointRadius = value );
@@ -1240,7 +1237,6 @@ UIInputInit( 'draw-something-duration-multiplier', value => durationMultiplier =
 UIInputInit( 'draw-something-composite-operation', value => compositeOperationurrentLine = value );
 UIInputInit( 'draw-something-line-width', value => lineWidthScale = value);
 UIInputInit( 'draw-something-background-color', value => document.body.style.setProperty('--bg', value));
-UIInputInit( 'draw-ui', value => drawUI = value, 'checked' );
 UIInputInit( 'playpause', value => isPaused = value, 'checked' );
 UIInputInit( 'show-buffer', value => initialShownBuffer && (initialShownBuffer.hidden = !value), 'checked' );
 
@@ -1266,9 +1262,9 @@ hintButton.addEventListener( 'click', event => {
 
     event.preventDefault();
 
-    if( displayHintForTimeRemaining === 0 ){
+    if( displayHintTimeRemaining === 0 ){
 
-        displayHintForTimeRemaining = 1000;
+        displayHintTimeRemaining = DURATIONS.hint;
 
     }
     
