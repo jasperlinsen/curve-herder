@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+    <head>
+
+        <title>Simple Canbas [SIC]</title>
+
+    </head>
+    <body>
+
+        <canvas id="canvas"></canvas>
+        <canvas id="buffer" hidden></canvas>
+        <canvas id="overlay" hidden></canvas>
+        <canvas id="intersection" hidden></canvas>
+        <canvas id="intersection-buffer" hidden></canvas>
+
+        <h2 id="remaining"></h2>
+        <h2 id="time"></h2>
+        <button id="hint">Hint</button>
+
+        <nav>
+            <label>
+                <span>type</span>
+                <select id="draw-something-type">
+                    <option value="straight">Straight</option>
+                    <option value="curved" selected>Curved</option>
+                </select>
+            </label>
+            <label>
+                <span>Background Color</span>
+                <input id="draw-something-background-color" type="color" value="#000000" />
+            </label>
+            <label>
+                <span>Duration</span>
+                <input id="draw-something-duration-multiplier" type="range" min=".001" max="3" value="1" step=".001" />
+            </label>
+            <label>
+                <span>Line Width Average</span>
+                <input id="draw-something-line-width" type="range" min=".01" max="5" value="1" step=".01" />
+            </label>
+            <label>
+                <span>CP Radius</span>
+                <input id="draw-something-cp-radius" type="range" min=".5" max="20" value="1" step=".001" />
+            </label>
+            <label>
+                <span>CP Centered</span>
+                <input id="draw-something-cp-centered" type="range" min="0" max="1" value="1" step=".01" />
+            </label>
+            <label>
+                <span>Composite Operation</span>
+                <select id="draw-something-composite-operation">
+                    <option value="source-over">source-over</option>
+                    <option value="destination-over">destination-over</option>
+                    <option value="difference">difference</option>
+                    <option value="multiply">multiply</option>
+                    <option value="overlay">overlay</option>
+                </select>
+            </label>
+            <label>
+                <input type="checkbox" id="playpause">
+                <span></span>
+            </label>
+            <label>
+                <input type="checkbox" checked id="draw-ui">
+                <span>Draw UI</span>
+            </label>
+            <label>
+                <input type="checkbox" checked id="show-buffer">
+                <span>Show Buffer</span>
+            </label>
+            <ul>
+                <button role="listitem" id="move">Move</button>
+                <button role="listitem" id="reset">Reset</button>
+                <button role="listitem" id="clear">Clear</button>
+            </ul>
+        </nav>
+
+        <svg width="0" height="0" style="visibility:hidden;position:absolute">
+            <filter id="lumToAlpha">
+                <feColorMatrix type="luminanceToAlpha" />
+            </filter>
+        </svg>
+
+        <script type="module" src="index.js"></script>
+        <style type="text/css">
+            @keyframes fadein { from { opacity: 0; } to { opacity: 1 } };
+            @keyframes fadeout { from { opacity: 1 } to { opacity: 0; } };
+           
+            html, body { height: 100%; }
+            body { background: var(--bg); overflow: hidden; font-family: 'Arial', sans-serif; user-select: none; }
+            body > canvas,
+            body > nav { position: fixed; top: 0; left: 0; }
+            body > canvas:not(#canvas){ top: 30px; left: 30px; width: 20vw !important; height: 20vh !important; border: 1px solid red; background: var(--bg); }
+            
+            nav { display: flex; flex-direction: column; top: auto; left: auto; bottom: 20px; right: 20px; z-index: 20; background: black; padding: 20px; box-sizing: border-box; height: auto; color: white; }
+            nav.bottom-left { right: auto; top: auto; bottom: 20px; left: 20px; }
+            nav ul { padding: 0; margin: 0; display: flex; align-items: center; justify-content: center; gap: 5px;  }
+            
+            nav { display: none; }
+
+            label { display: grid; grid-template-columns: 3em 1fr; width: 100%; align-items: center; }
+            label span { font-size: .5em; }
+            nav > *:not(:last-child) { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid gray; }
+            
+            #playpause + span:before { content: 'Playing'; }
+            #playpause:checked + span:before { content: 'Paused'; }
+            h2 { position: fixed; top: 20px; font-size: 100px; color: white; padding: 0; margin: 0; }
+            #remaining { left: 20px; }
+            #time { right: 20px; }
+            
+            .you-won h2 { color: gold; text-shadow: 0 0 40px black;}
+            
+            button { margin: 0; -webkit-appearance: none; appearance: none; background: var(--bg); color: white; padding: 20px; border: 1px solid white; cursor: pointer; }
+            button:hover { background: var(--accent, purple); }
+
+            ch-menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 30; background: black; color: white; opacity: 0; transition: opacity var(--temporary-duration, .2s); }
+            ch-menu:not(.removed) { opacity: 1; animation: fadein .2s; }
+
+            @keyframes countup { from { opacity: 1; } 70% { transform: translateY(100%); opacity: 0; } to { opacity: 0; }}
+            @keyframes countdown { from { transform: translateY(50%); opacity: 1; } 70% { transform: translateY(-100%) scale(.4); opacity: 0; } to { opacity: 0; }}
+            @keyframes disappear { to { opacity: 0; }}
+            @keyframes enlarge { from { transform: scale(1); } to { transform: scale(3); } }
+
+            ch-menu[type=score]{ font-size: 6vw; }
+            ch-menu[type=score] dl { position: relative; z-index: 2; }
+            ch-menu[type=score] dl * { text-align: center; margin: 0; padding: 0; }
+            ch-menu[type=score] dl dd { color: gold; transform-origin: 50% 100%; display: flex; align-items: center; justify-content: center; animation-fill-mode: both; }
+            ch-menu[type=score] dl dt { overflow: hidden; }
+            ch-menu[type=score] dl dt.done { animation: disappear .4s; opacity: 0; }
+            ch-menu[type=score] dl dt.done + dd { animation: enlarge 1s; transform: scale(3); }
+            ch-menu[type=score] dl dt.countdown { animation: countdown calc(var(--temporary-duration, 500ms) / 2) ease-in; }
+            ch-menu[type=score] dl dt.countup { animation: countup calc(var(--temporary-duration, 500ms) / 2) ease-in; }
+            ch-menu[type=score] canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100% !important;
+                height: 100% !important;
+                pointer-events: none;
+                z-index: 0;
+            }
+            ch-menu[type=options]{ border: 1px solid white; list-style: none; }
+            ch-menu[type=dialog] p,
+            ch-menu[type=dialog] button,
+            ch-menu[type=options] li { width: max(200px,30vw); padding: 20px; border: 1px solid white; cursor: pointer; }
+            ch-menu[type=options] li:hover { background: var(--accent, purple); border: 1px solid yellow; }
+            ch-menu[type=options] li:not(:last-child) { border-bottom: none; }
+            ch-menu[type=options] li:not(:last-child):hover + li { border-top-color: yellow; }
+
+
+            ch-menu[type=dialog] p { margin: 0; box-sizing: border-box; border: none; }
+            ch-menu[type=dialog] p + p { padding-top: 0; }
+
+            #hint { position: fixed; bottom: 20px;left: 20px; }
+        </style>
+
+    </body>
+</html>
